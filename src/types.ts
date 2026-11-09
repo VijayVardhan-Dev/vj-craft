@@ -23,4 +23,5 @@ export type StoredState = {
   draft?: Partial<Draft>;
   entries?: Entry[];
   topic?: string;
+  collectedProblems?: Array<Record<string, unknown>>;
 };

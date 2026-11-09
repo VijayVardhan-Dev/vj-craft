@@ -2,7 +2,7 @@ import type { StoredState } from "../types";
 
 export const storage = {
   async get(): Promise<StoredState> {
-    return chrome.storage.local.get(["draft", "entries", "profile", "topic"]);
+    return chrome.storage.local.get(["draft", "entries", "profile", "topic", "collectedProblems"]);
   },
   async set(value: StoredState): Promise<void> {
     await chrome.storage.local.set(value);

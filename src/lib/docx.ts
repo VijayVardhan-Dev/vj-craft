@@ -27,10 +27,21 @@ function text(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function multilineParagraph(value: string, style?: string): Paragraph {
+  const lines = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const runs: TextRun[] = [];
+  lines.forEach((line, index) => {
+    if (index) runs.push(new TextRun({ break: 1 }));
+    runs.push(new TextRun({ text: line }));
+  });
+  return new Paragraph({ style, children: runs });
+}
+
 function labelled(label: string, value: string): Paragraph[] {
   return [
     new Paragraph({ children: [new TextRun({ text: label, bold: true })] }),
-    new Paragraph(value || "(not available)")
+    new Paragraph(""),
+    multilineParagraph(value || "(not available)")
   ];
 }
 
@@ -45,8 +56,14 @@ export async function buildDocx(profile: Profile, problems: CollectedProblem[]):
     new Paragraph({ children: [new PageBreak()] })
   ];
 
-  problems.forEach((problem, index) => {
-    const aim = [problem.description, problem.input_format && `Input Format:\n${problem.input_format}`, problem.output_format && `Output Format:\n${problem.output_format}`, problem.constraints && `Constraints:\n${problem.constraints}`].filter(Boolean).join("\n\n");
+  const topics = [...new Set(problems.map((problem) => text(problem.chapter) || "General"))];
+  let globalNumber = 0;
+  topics.forEach((topic) => {
+    const topicProblems = problems.filter((problem) => (text(problem.chapter) || "General") === topic);
+    children.push(new Paragraph({ text: `${topic} (${topicProblems.length} of ${topicProblems.length})`, heading: HeadingLevel.HEADING_1 }));
+    topicProblems.forEach((problem, topicIndex) => {
+    globalNumber += 1;
+    const aim = text(problem.description) || "(not available)";
     const code = problem.student_code || "MISSING: no accepted submission was found.";
     const output = (problem.examples ?? []).map((example, exampleIndex) => [
       `Example ${exampleIndex + 1}`,
@@ -56,15 +73,17 @@ export async function buildDocx(profile: Profile, problems: CollectedProblem[]):
     ].filter(Boolean).join("\n")).join("\n\n") || "(no sample output captured)";
 
     children.push(
-      new Paragraph({ text: `${index + 1}. ${text(problem.title) || "Untitled problem"}`, heading: HeadingLevel.HEADING_1 }),
+      new Paragraph({ text: `${topicIndex + 1}.`, heading: HeadingLevel.HEADING_2 }),
       ...labelled("Aim", aim),
       new Paragraph({ children: [new TextRun({ text: "Source Code", bold: true })] }),
-      new Paragraph({ style: "Code", text: code }),
-      new Paragraph({ children: [new TextRun({ text: `Code source: ${problem.student_status || "unknown"}${problem.student_language ? ` (${problem.student_language})` : ""}`, italics: true })] }),
+      new Paragraph(""),
+      multilineParagraph(code, "Code"),
       new Paragraph({ children: [new TextRun({ text: "Output", bold: true })] }),
-      new Paragraph({ style: "Code", text: output }),
-      ...(index < problems.length - 1 ? [new Paragraph({ children: [new PageBreak()] })] : [])
+      new Paragraph(""),
+      multilineParagraph(output, "Code"),
+      ...(globalNumber < problems.length ? [new Paragraph({ children: [new PageBreak()] })] : [])
     );
+    });
   });
 
   const document = new Document({

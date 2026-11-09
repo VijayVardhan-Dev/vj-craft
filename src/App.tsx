@@ -24,6 +24,7 @@ function App() {
       setProfile({ ...defaultProfile, ...state.profile });
       setDraft({ ...emptyDraft, ...state.draft });
       setEntries(state.entries ?? []);
+      setCollectedProblems((state.collectedProblems ?? []) as CollectedProblem[]);
       setTopic(state.topic ?? "");
     }).catch((error: unknown) => notify(error instanceof Error ? error.message : "Could not load saved data.", true));
   }, []);
@@ -54,7 +55,7 @@ function App() {
     const index = entries.findIndex((item) => item.topic === entry.topic && item.question === entry.question);
     const next = [...entries];
     if (index >= 0) next[index] = entry; else next.push(entry);
-    setEntries(next); setCollectedProblems([]); setDraft(emptyDraft); await save({ entries: next, draft: emptyDraft }); notify(index >= 0 ? "Entry updated." : `Added entry ${next.length}.`);
+    setEntries(next); setCollectedProblems([]); setDraft(emptyDraft); await save({ entries: next, draft: emptyDraft, collectedProblems: [] }); notify(index >= 0 ? "Entry updated." : `Added entry ${next.length}.`);
   }
   function downloadDocument() {
     if (!entries.length) return notify("Add at least one problem first.", true);
@@ -63,7 +64,7 @@ function App() {
   }
   async function clearAll() {
     if (!window.confirm("Remove all captured problems?")) return;
-    setEntries([]); setDraft(emptyDraft); await save({ entries: [], draft: emptyDraft }); notify("All captured problems removed.");
+    setEntries([]); setCollectedProblems([]); setDraft(emptyDraft); await save({ entries: [], draft: emptyDraft, collectedProblems: [] }); notify("All captured problems removed.");
   }
   async function collectCourse() {
     try {
@@ -89,7 +90,7 @@ function App() {
       }));
       setCollectedProblems(parsed.problems);
       setEntries(imported);
-      await save({ entries: imported, draft: emptyDraft });
+      await save({ entries: imported, draft: emptyDraft, collectedProblems: parsed.problems as Array<Record<string, unknown>> });
       notify(`Imported ${imported.length} problems. Review the entries, then download the document.`);
     } catch (error) { notify(error instanceof Error ? error.message : "Could not import problems.json.", true); }
   }
