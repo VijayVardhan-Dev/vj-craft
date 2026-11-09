@@ -9,13 +9,18 @@ export const storage = {
   }
 };
 
-export async function runInActiveTab<T>(func: () => T): Promise<T> {
+export async function runInActiveTab<T, A extends unknown[] = []>(func: (...args: A) => T, args?: A): Promise<T> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab.id) {
     throw new Error("No active browser tab was found.");
   }
 
-  const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func });
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func,
+    args
+  });
   if (!result) {
     throw new Error("MentorPick did not return a result.");
   }

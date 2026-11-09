@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { buildDoc } from "./lib/doc";
+import { buildDocx, type CollectedProblem } from "./lib/docx";
+import { collectCourseInPage } from "./lib/collector";
 import { grabCodeInPage, grabQuestionInPage } from "./lib/pageCapture";
 import { runInActiveTab, storage } from "./lib/storage";
 import type { Draft, Entry, Profile, StoredState } from "./types";
@@ -13,6 +15,8 @@ function App() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [topic, setTopic] = useState("");
+  const [chapterFilter, setChapterFilter] = useState("Making Decisions");
+  const [collectedProblems, setCollectedProblems] = useState<CollectedProblem[]>([]);
   const [message, setMessage] = useState<{ text: string; error?: boolean }>({ text: "" });
 
   useEffect(() => {
@@ -50,7 +54,7 @@ function App() {
     const index = entries.findIndex((item) => item.topic === entry.topic && item.question === entry.question);
     const next = [...entries];
     if (index >= 0) next[index] = entry; else next.push(entry);
-    setEntries(next); setDraft(emptyDraft); await save({ entries: next, draft: emptyDraft }); notify(index >= 0 ? "Entry updated." : `Added entry ${next.length}.`);
+    setEntries(next); setCollectedProblems([]); setDraft(emptyDraft); await save({ entries: next, draft: emptyDraft }); notify(index >= 0 ? "Entry updated." : `Added entry ${next.length}.`);
   }
   function downloadDocument() {
     if (!entries.length) return notify("Add at least one problem first.", true);
@@ -61,6 +65,43 @@ function App() {
     if (!window.confirm("Remove all captured problems?")) return;
     setEntries([]); setDraft(emptyDraft); await save({ entries: [], draft: emptyDraft }); notify("All captured problems removed.");
   }
+  async function collectCourse() {
+    try {
+      notify("Collecting course data. This is read-only and may take a few minutes.");
+      const result = await runInActiveTab(collectCourseInPage, ["6a643039af8ff368d7872d24", chapterFilter.trim()]);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a"); link.href = url; link.download = "problems.json"; link.click(); URL.revokeObjectURL(url);
+      notify(`Collected ${result.problems.length} problems${result.issues.length ? ` with ${result.issues.length} issues` : "."}`, Boolean(result.issues.length));
+    } catch (error) { notify(error instanceof Error ? error.message : "Could not collect course data.", true); }
+  }
+  async function importProblems(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as { problems?: CollectedProblem[] };
+      if (!Array.isArray(parsed.problems)) throw new Error("This file does not contain a problems array.");
+      const imported = parsed.problems.map((problem) => ({
+        topic: String(problem.chapter ?? "General"),
+        question: String(problem.description ?? problem.title ?? ""),
+        code: String(problem.student_code ?? ""),
+        output: Array.isArray(problem.examples) ? problem.examples.map((example) => `Input:\n${String(example.input ?? "")}\nOutput:\n${String(example.output ?? "")}`).join("\n\n") : ""
+      }));
+      setCollectedProblems(parsed.problems);
+      setEntries(imported);
+      await save({ entries: imported, draft: emptyDraft });
+      notify(`Imported ${imported.length} problems. Review the entries, then download the document.`);
+    } catch (error) { notify(error instanceof Error ? error.message : "Could not import problems.json.", true); }
+  }
+  async function downloadDocx() {
+    if (!entries.length) return notify("Import problems.json or add a problem first.", true);
+    try {
+      const problems = collectedProblems.length ? collectedProblems : entries.map((entry) => ({ chapter: entry.topic, title: entry.question, description: entry.question, student_code: entry.code, examples: entry.output ? [{ output: entry.output }] : [] }));
+      const blob = await buildDocx(profile, problems);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a"); link.href = url; link.download = "MentorPick_Record.docx"; link.click(); URL.revokeObjectURL(url);
+    } catch (error) { notify(error instanceof Error ? error.message : "Could not create DOCX.", true); }
+  }
 
   return <main className="app">
     <header><div><span className="eyebrow">STUDENT TOOL</span><h1>VJ CRAFT</h1></div><span className="count">{entries.length} saved</span></header>
@@ -69,7 +110,7 @@ function App() {
     <section className="card"><div className="card-title"><h2>Problem details</h2><span className="hint">Step 1</span></div><label>Topic / chapter<input list="topics" value={topic} onChange={async (event) => { setTopic(event.target.value); await save({ topic: event.target.value }); }} placeholder="e.g. Speak to the Machine" /></label><datalist id="topics">{topics.map((item) => <option key={item} value={item} />)}</datalist><button onClick={captureQuestion}>Capture question + sample output</button><textarea value={draft.question} onChange={(event) => updateDraft("question", event.target.value)} placeholder="Question / aim" /><textarea value={draft.output} onChange={(event) => updateDraft("output", event.target.value)} placeholder="Sample output" /></section>
     <section className="card"><div className="card-title"><h2>Submitted solution</h2><span className="hint">Step 2</span></div><button onClick={captureCode}>Capture code from editor</button><textarea className="code" value={draft.code} onChange={(event) => updateDraft("code", event.target.value)} placeholder="Python source code" /></section>
     <button className="primary" onClick={addEntry}>+ Add problem to document</button>
-    <section className="card"><div className="card-title"><h2>Document</h2><span className="hint">{entries.length} problems</span></div><div className="entry-list">{entries.map((entry, index) => <div className="entry" key={`${entry.topic}-${entry.question}`}><span><b>{index + 1}. {entry.question}</b><small>{entry.topic}</small></span><button className="icon" title="Remove" onClick={async () => { const next = entries.filter((_, itemIndex) => itemIndex !== index); setEntries(next); await save({ entries: next }); }}>×</button></div>)}</div><div className="actions"><button onClick={downloadDocument}>Download .doc</button><button className="danger" onClick={clearAll}>Clear all</button></div></section>
+    <section className="card"><div className="card-title"><h2>Document</h2><span className="hint">{entries.length} problems</span></div><div className="entry-list">{entries.map((entry, index) => <div className="entry" key={`${entry.topic}-${entry.question}`}><span><b>{index + 1}. {entry.question}</b><small>{entry.topic}</small></span><button className="icon" title="Remove" onClick={async () => { const next = entries.filter((_, itemIndex) => itemIndex !== index); setEntries(next); await save({ entries: next }); }}>×</button></div>)}</div><div className="actions"><button onClick={downloadDocument}>Download .doc</button><button onClick={downloadDocx}>Download .docx</button><button className="danger" onClick={clearAll}>Clear all</button></div><label>Import collected problems.json<input type="file" accept=".json,application/json" onChange={importProblems} /></label><label>Collector chapter filter (blank = all chapters)<input value={chapterFilter} onChange={(event) => setChapterFilter(event.target.value)} placeholder="Making Decisions" /></label><button className="collect" onClick={collectCourse}>Collect course data (read-only)</button></section>
   </main>;
 }
 

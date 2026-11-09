@@ -15,5 +15,6 @@ input:focus, textarea:focus { border-color: #3a78c2; box-shadow: 0 0 0 2px #3a78
 button { padding: 8px 10px; border: 0; border-radius: 7px; color: #fff; background: #2f70bd; cursor: pointer; font: inherit; font-weight: 700; } button:hover { background: #245c9e; }
 .primary { width: calc(100% - 24px); margin: 10px 12px 0; background: #198653; } .primary:hover { background: #147044; }
 .actions { display: flex; gap: 7px; margin-top: 10px; } .actions button { flex: 1; } .danger { color: #a62929; background: #fdecec; } .danger:hover { background: #f9dada; } button.icon { padding: 0 7px; color: #a62929; background: transparent; font-size: 18px; }
+.collect { width: 100%; margin-top: 8px; color: #31577f; background: #edf4fc; } .collect:hover { background: #dceafa; }
 .entry-list { max-height: 145px; overflow: auto; } .entry { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #eef2f6; } .entry span { min-width: 0; flex: 1; } .entry b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; } .entry small { margin-top: 2px; color: #8290a4; letter-spacing: 0; text-transform: none; }
 .message { margin: 9px 12px 0; padding: 8px 10px; border-radius: 7px; font-weight: 600; } .success { color: #146c43; background: #e8f7ef; } .error { color: #a32929; background: #fcecec; }
